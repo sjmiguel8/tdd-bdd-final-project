@@ -248,6 +248,43 @@ class TestProductRoutes(TestCase):
         for product in data:
             self.assertEqual(product["available"], True)
 
+    def test_list_all_products(self):
+        """It should Get a list of all Products"""
+        # add two products to test with
+        self._create_products(2)
+        # get the list back
+        response = self.client.get(BASE_URL)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.get_json()
+        self.assertEqual(len(data), 2)
+
+    def test_delete_product(self):
+        """It should Delete a Product"""
+        products = self._create_products(1)
+        product = products[0]
+        response = self.client.delete(f"{BASE_URL}/{product.id}")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_delete_product_not_found(self):
+        """It should not Delete a Product that is not found"""
+        response = self.client.delete(f"{BASE_URL}/0")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_update_product_not_found(self):
+        """It should not Update a Product that is not found"""
+        test_product = ProductFactory()
+        response = self.client.put(f"{BASE_URL}/0", json=test_product.serialize())
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_update_product_bad_request(self):
+        """It should not Update a Product with bad data"""
+        test_product = self._create_products(1)[0]
+        # Create bad data by removing required field
+        data = test_product.serialize()
+        del data["name"]
+        response = self.client.put(f"{BASE_URL}/{test_product.id}", json=data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     ######################################################################
     # Utility functions
     ######################################################################
@@ -259,4 +296,3 @@ class TestProductRoutes(TestCase):
         data = response.get_json()
         # logging.debug("data = %s", data)
         return len(data)
-
