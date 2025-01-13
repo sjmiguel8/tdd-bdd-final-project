@@ -18,35 +18,24 @@
 Test Factory to make fake objects for testing
 """
 import factory
+from factory.alchemy import SQLAlchemyModelFactory
 from factory.fuzzy import FuzzyChoice, FuzzyDecimal
-from service.models import Product, Category
+from service.models import Product, Category, db
 
 
-class ProductFactory(factory.Factory):
+class ProductFactory(SQLAlchemyModelFactory):
     """Creates fake products for testing"""
 
     class Meta:
         """Maps factory to data model"""
 
         model = Product
+        sqlalchemy_session = db.session
+        sqlalchemy_session_persistence = "flush"
+        exclude = ("id",)  # Exclude id from factory to let database handle it
 
-    id = factory.Sequence(lambda n: n)
-   ## Add code to create Fake Products 
-    name = FuzzyChoice(
-        choices=[
-            "Hat",
-            "Pants",
-            "Shirt",
-            "Apple",
-            "Banana",
-            "Pots",
-            "Towels",
-            "Ford",
-            "Chevy",
-            "Hammer",
-            "Wrench"
-        ]
-    )
+    # Add code to create Fake Products 
+    name = factory.Sequence(lambda n: f"Product_{n}")
     description = factory.Faker("text")
     price = FuzzyDecimal(0.5, 2000.0, 2)
     available = FuzzyChoice(choices=[True, False])

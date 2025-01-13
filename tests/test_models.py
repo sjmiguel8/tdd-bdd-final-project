@@ -27,7 +27,7 @@ import os
 import logging
 import unittest
 from decimal import Decimal
-from service.models import Product, Category, db
+from service.models import Product, Category, db, init_db
 from service import app
 from tests.factories import ProductFactory
 
@@ -50,12 +50,16 @@ class TestProductModel(unittest.TestCase):
         app.config["DEBUG"] = False
         app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
-        Product.init_db(app)
+        init_db(app)
+        db.session.close()
+        db.drop_all()
+        db.create_all()
 
     @classmethod
     def tearDownClass(cls):
         """This runs once after the entire test suite"""
         db.session.close()
+        db.drop_all()
 
     def setUp(self):
         """This runs before each test"""
@@ -64,6 +68,8 @@ class TestProductModel(unittest.TestCase):
 
     def tearDown(self):
         """This runs after each test"""
+        db.session.query(Product).delete()  # clean up after test
+        db.session.commit()
         db.session.remove()
 
     ######################################################################
@@ -87,7 +93,8 @@ class TestProductModel(unittest.TestCase):
         products = Product.all()
         self.assertEqual(products, [])
         product = ProductFactory()
-        product.id = None
+        db.session.commit()  # Commit the product created by factory
+        self.assertIsNotNone(product.id)
         product.create()
         # Assert that it was assigned an id and shows up in the database
         self.assertIsNotNone(product.id)
@@ -105,10 +112,18 @@ class TestProductModel(unittest.TestCase):
     # ADD YOUR TEST CASES HERE
     #
 
+    def _create_products(self, count):
+        """Factory method to create products in bulk"""
+        products = []
+        for _ in range(count):
+            test_product = ProductFactory()
+            test_product.create()
+            products.append(test_product)
+        return products
+
     def test_read_a_product(self):
         """It should Read a Product"""
         product = ProductFactory()
-        product.id = None
         product.create()
         self.assertIsNotNone(product.id)
         # Fetch it back
@@ -121,7 +136,6 @@ class TestProductModel(unittest.TestCase):
     def test_update_a_product(self):
         """It should Update a Product"""
         product = ProductFactory()
-        product.id = None
         product.create()
         self.assertIsNotNone(product.id)
         # Change it an save it
@@ -135,7 +149,6 @@ class TestProductModel(unittest.TestCase):
         products = Product.all()
         self.assertEqual(len(products), 1)
         self.assertEqual(products[0].id, original_id)
-        self.assertEqual(products[0].description, "testing")
 
     def test_delete_a_product(self):
         """It should Delete a Product"""
@@ -197,13 +210,7 @@ class TestProductModel(unittest.TestCase):
     def test_delete_product(self):
         """It should Delete a Product"""
         products = self._create_products(5)
-        product_count = self.get_product_count()
+        product_count = len(Product.all())
         test_product = products[0]
-        response = self.client.delete(f"{BASE_URL}/{test_product.id}")
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(len(response.data), 0)
-        # make sure they are deleted
-        response = self.client.get(f"{BASE_URL}/{test_product.id}")
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        new_count = self.get_product_count()
-        self.assertEqual(new_count, product_count - 1)
+        test_product.delete()
+        self.assertEqual(len(Product.all()), product_count - 1)

@@ -25,16 +25,20 @@ import sys
 from flask import Flask
 from service import config
 from service.common import log_handlers
+from service.models import db  # noqa: F401, E402
 
 # NOTE: Do not change the order of this code
 # The Flask app must be created
 # BEFORE you import modules that depend on it !!!
 
-# Create the Flask aoo
+# Create the Flask app
 app = Flask(__name__)  # pylint: disable=invalid-name
 
 # Load Configurations
 app.config.from_object(config)
+
+# Initialize SQLAlchemy
+db.init_app(app)
 
 # Dependencies require we import the routes AFTER the Flask app is created
 # pylint: disable=wrong-import-position, wrong-import-order, cyclic-import

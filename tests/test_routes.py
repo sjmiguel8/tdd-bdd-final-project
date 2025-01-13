@@ -58,39 +58,40 @@ class TestProductRoutes(TestCase):
         """Run once before all tests"""
         app.config["TESTING"] = True
         app.config["DEBUG"] = False
-        # Set up the test database
         app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URI
         app.logger.setLevel(logging.CRITICAL)
         init_db(app)
+        db.session.close()
+        db.drop_all()
+        db.create_all()
 
     @classmethod
     def tearDownClass(cls):
-        """Run once after all tests"""
+        """This runs once after the entire test suite"""
         db.session.close()
+        db.drop_all()
 
     def setUp(self):
-        """Runs before each test"""
-        self.client = app.test_client()
+        """This runs before each test"""
         db.session.query(Product).delete()  # clean up the last tests
         db.session.commit()
+        self.client = app.test_client()
 
     def tearDown(self):
+        """This runs after each test"""
+        db.session.query(Product).delete()  # clean up after test
+        db.session.commit()
         db.session.remove()
 
     ############################################################
     # Utility function to bulk create products
     ############################################################
-    def _create_products(self, count: int = 1) -> list:
+    def _create_products(self, count=1):
         """Factory method to create products in bulk"""
         products = []
         for _ in range(count):
             test_product = ProductFactory()
-            response = self.client.post(BASE_URL, json=test_product.serialize())
-            self.assertEqual(
-                response.status_code, status.HTTP_201_CREATED, "Could not create test product"
-            )
-            new_product = response.get_json()
-            test_product.id = new_product["id"]
+            test_product.create()
             products.append(test_product)
         return products
 

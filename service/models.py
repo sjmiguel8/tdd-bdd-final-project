@@ -42,7 +42,8 @@ db = SQLAlchemy()
 
 def init_db(app):
     """Initialize the SQLAlchemy app"""
-    Product.init_db(app)
+    app.app_context().push()
+    db.create_all()  # make our sqlalchemy tables
 
 
 class DataValidationError(Exception):
@@ -68,10 +69,12 @@ class Product(db.Model):
     from us by SQLAlchemy's object relational mappings (ORM)
     """
 
+    app = None
+
     ##################################################
     # Table Schema
     ##################################################
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(250), nullable=False)
     price = db.Column(db.Numeric, nullable=False)
@@ -92,10 +95,15 @@ class Product(db.Model):
         Creates a Product to the database
         """
         logger.info("Creating %s", self.name)
-        # id must be none to generate next primary key
-        self.id = None  # pylint: disable=invalid-name
-        db.session.add(self)
-        db.session.commit()
+        try:
+            db.session.add(self)
+            db.session.commit()
+            return self
+        except Exception as e:
+            db.session.rollback()
+            raise DataValidationError(
+                "Error creating record: " + str(e)
+            ) from e
 
     def update(self):
         """
@@ -104,7 +112,16 @@ class Product(db.Model):
         logger.info("Saving %s", self.name)
         if not self.id:
             raise DataValidationError("Update called with empty ID field")
-        db.session.commit()
+        try:
+            if not Product.query.get(self.id):
+                raise DataValidationError("Product not found")
+            db.session.commit()
+            return self
+        except Exception as e:
+            db.session.rollback()
+            raise DataValidationError(
+                "Error updating record: " + str(e)
+            ) from e
 
     def delete(self):
         """Removes a Product from the data store"""
@@ -156,20 +173,6 @@ class Product(db.Model):
     ##################################################
 
     @classmethod
-    def init_db(cls, app: Flask):
-        """Initializes the database session
-
-        :param app: the Flask app
-        :type data: Flask
-
-        """
-        logger.info("Initializing database")
-        # This is where we initialize SQLAlchemy from the Flask app
-        db.init_app(app)
-        app.app_context().push()
-        db.create_all()  # make our sqlalchemy tables
-
-    @classmethod
     def all(cls) -> list:
         """Returns all of the Products in the database"""
         logger.info("Processing all Products")
@@ -187,10 +190,10 @@ class Product(db.Model):
 
         """
         logger.info("Processing lookup for id %s ...", product_id)
-        return cls.query.get(product_id)
+        return db.session.get(cls, product_id)
 
     @classmethod
-    def find_by_name(cls, name: str) -> list:
+    def find_by_name(cls, name: str):
         """Returns all Products with the given name
 
         :param name: the name of the Products you want to match
@@ -221,29 +224,29 @@ class Product(db.Model):
         return cls.query.filter(cls.price == price_value)
 
     @classmethod
-    def find_by_availability(cls, available: bool = True) -> list:
+    def find_by_availability(cls, available: bool = True):
         """Returns all Products by their availability
 
         :param available: True for products that are available
-        :type available: str
+        :type available: bool
 
         :return: a collection of Products that are available
         :rtype: list
 
         """
-        logger.info("Processing available query for %s ...", available)
+        logger.info("Processing availability query for %s...", available)
         return cls.query.filter(cls.available == available)
 
     @classmethod
-    def find_by_category(cls, category: Category = Category.UNKNOWN) -> list:
+    def find_by_category(cls, category: Category = Category.UNKNOWN):
         """Returns all Products by their Category
 
-        :param category: values are ['MALE', 'FEMALE', 'UNKNOWN']
-        :type available: enum
+        :param category: values are ['UNKNOWN', 'CLOTHS', 'FOOD', 'HOUSEWARES', 'AUTOMOTIVE', 'TOOLS']
+        :type category: enum
 
         :return: a collection of Products that are available
         :rtype: list
 
         """
-        logger.info("Processing category query for %s ...", category.name)
+        logger.info("Processing category query for %s...", category.name)
         return cls.query.filter(cls.category == category)
